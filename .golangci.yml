@@ -10,15 +10,12 @@ linters:
     - exhaustive
     - exportloopref
     - gci
-    - gocognit
     - goconst
     - gocritic
-    - gocyclo
     - goerr113
     - gofumpt
     - goprintffuncname
     - gosec
-    - ifshort
     - lll
     - misspell
     - nestif
@@ -44,7 +41,7 @@ linters-settings:
     disable:
       - shadow
   gci:
-    local-prefixes: github.com/sv-tools/go-repo-template
+    local-prefixes: github.com/sv-tools/mock-http-server
   gocognit:
     min-complexity: 15
   gocyclo:

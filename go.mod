@@ -1,3 +1,3 @@
-module github.com/sv-tools/go-repo-template
+module github.com/sv-tools/mock-http-server
 
-go 1.17
+go 1.20
