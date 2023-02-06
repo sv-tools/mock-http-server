@@ -1,0 +1,30 @@
+routes:
+  - method: get
+    pattern: /users
+    responses:
+      - code: 200
+        body: |
+          [
+            {
+              "name": "foo"
+            },
+            {
+              "name": "bar"
+            }
+          ]
+        is_json: true
+        repeat: 3
+      - code: 500
+        repeat: 1
+        body: "something is broken"
+      - code: 200
+        body: |
+          [
+            {
+              "name": "foo"
+            },
+            {
+              "name": "bar"
+            }
+          ]
+        is_json: true

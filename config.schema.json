@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/sv-tools/mock-http-server/main/config.schema.json",
+  "title": "Mock HTTP Server Config Schema",
+  "description": "Schema to validate the config of the Mock HTTP Server",
+  "type": "object",
+  "properties": {
+    "port": {
+      "description": "The http port for the server",
+      "default": 8080,
+      "type": "integer"
+    },
+    "request_id_header": {
+      "description": "Name of an HTTP header for Request Id",
+      "default": "X-Request-Id",
+      "type": "string"
+    },
+    "routes": {
+      "description": "The list of routes",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "method": {
+            "description": "The HTTP method, any of the standard or custom.",
+            "default": "GET",
+            "type": "string"
+          },
+          "pattern": {
+            "description": "An url pattern",
+            "default": "/",
+            "type": "string"
+          },
+          "responses": {
+            "description": "List of the responses",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "description": "The response Status Code",
+                  "default": 200,
+                  "type": "integer"
+                },
+                "headers": {
+                  "description": "The response headers in form of name and list of values",
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "body": {
+                  "description": "The response body as text",
+                  "type": "string"
+                },
+                "file": {
+                  "description": "A path to a file to be used as response body",
+                  "type": "string"
+                },
+                "is_json": {
+                  "description": "A flag to automatically add the `Content-Type: application/json` response header",
+                  "default": false,
+                  "type": "boolean"
+                },
+                "repeat": {
+                  "description": "the number of repeats. Infinity if no set. Zero to skip. Or an exact number of repeats.",
+                  "type": "integer"
+                }
+              }
+            },
+            "minItems": 1
+          }
+        },
+        "required": ["responses"]
+      },
+      "minItems": 1
+    }
+  },
+  "required": ["routes"]
+}
