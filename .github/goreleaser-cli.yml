@@ -122,14 +122,3 @@ docker_manifests:
       - "svtools/{{ .ProjectName }}:{{ .Tag }}-arm64v8"
     create_flags:
       - --amend
-
-brews:
-  - tap:
-      owner: sv-tools
-      name: homebrew-apps
-    folder: Formula
-    homepage: "{{ .GitURL }}"
-    description: "{{ .ProjectName }}"
-    license: MIT
-    install: bin.install "{{ .ProjectName }}"
-    test: assert_equal `#{bin}/{{ .ProjectName }} --version`, "{{ .ProjectName }} version v#{version}"
