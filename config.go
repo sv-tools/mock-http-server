@@ -1,9 +1,10 @@
 package main
 
 import (
-	"log"
 	"net/http"
 	"os"
+
+	"golang.org/x/exp/slog"
 )
 
 type Config struct {
@@ -27,7 +28,7 @@ type Response struct {
 	IsJSON  bool        `json:"is_json,omitempty" yaml:"is_json,omitempty"`
 }
 
-func responsesWriter(responses []Response) http.HandlerFunc {
+func responsesWriter(responses []Response, log *slog.Logger) http.HandlerFunc {
 	var i int
 	return func(writer http.ResponseWriter, request *http.Request) {
 		for {
@@ -70,7 +71,7 @@ func responsesWriter(responses []Response) http.HandlerFunc {
 
 			if len(data) > 0 {
 				if _, err := writer.Write(data); err != nil {
-					log.Printf("sending response failed: %+v", err)
+					log.Error("sending response failed", err)
 				}
 			}
 			return
