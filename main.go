@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,10 +14,13 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	flag "github.com/spf13/pflag"
+	"golang.org/x/exp/slog"
 	"gopkg.in/yaml.v3"
 )
 
 func main() {
+	logHandler := LogHandler()
+	log := slog.New(logHandler)
 	conf := flag.StringP("config", "c", "config.yaml", "config file")
 	port := flag.IntP("port", "p", 8080, "http port")
 	flag.Parse()
@@ -29,21 +31,24 @@ func main() {
 	if v := os.Getenv("PORT"); v != "" && !flag.Lookup("port").Changed {
 		p, err := strconv.Atoi(v)
 		if err != nil {
-			log.Fatal(err)
+			log.Error(fmt.Sprintf("wrong value %q of env variable PORT", v), err)
+			os.Exit(1)
 		}
 		port = &p
 	}
 
 	f, err := os.Open(*conf)
 	if err != nil {
-		log.Fatal(err)
+		log.Error(fmt.Sprintf("wrong config file %q", *conf), err)
+		os.Exit(1)
 	}
 
 	var config Config
 	d := yaml.NewDecoder(f)
 	d.KnownFields(true)
 	if err := d.Decode(&config); err != nil {
-		panic(err)
+		log.Error("decoding config failed", err)
+		os.Exit(1)
 	}
 	if config.Port != 0 {
 		port = &config.Port
@@ -52,7 +57,11 @@ func main() {
 	if config.RequestIDHeader != "" {
 		middleware.RequestIDHeader = config.RequestIDHeader
 	}
-	r := chi.NewRouter().With(middleware.Logger, middleware.RequestID)
+
+	r := chi.NewMux().With(middleware.RequestID, NewStructuredLogger(LogHandler()))
+	r.NotFound(func(writer http.ResponseWriter, request *http.Request) {
+		http.NotFound(writer, request)
+	})
 	for _, route := range config.Routes {
 		if route.Method == "" {
 			route.Method = "GET"
@@ -62,7 +71,7 @@ func main() {
 		if route.Pattern == "" {
 			route.Pattern = "/"
 		}
-		r.MethodFunc(route.Method, route.Pattern, responsesWriter(route.Responses))
+		r.MethodFunc(route.Method, route.Pattern, responsesWriter(route.Responses, log))
 	}
 
 	server := &http.Server{
@@ -83,22 +92,23 @@ func main() {
 		go func() {
 			<-shutdownCtx.Done()
 			if errors.Is(shutdownCtx.Err(), context.DeadlineExceeded) {
-				log.Fatal("graceful shutdown timed out.. forcing exit.")
+				log.Error("graceful shutdown timed out.. forcing exit.", nil)
+				os.Exit(1)
 			}
 		}()
 
 		// Trigger graceful shutdown
-		err := server.Shutdown(shutdownCtx)
-		if err != nil {
-			log.Fatal(err)
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			log.Error("graceful shutdown failed", err)
 		}
 		serverStopCtx()
 	}()
 
 	// Run the server
-	log.Printf("Listen on http://localhost:%d\n", *port)
+	log.Info(fmt.Sprintf("Listen on http://localhost:%d", *port))
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatal(err)
+		log.Error("starting failed", err)
+		os.Exit(1)
 	}
 
 	// Wait for server context to be stopped
