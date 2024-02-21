@@ -53,7 +53,7 @@ func responsesWriter(responses []Response, log *slog.Logger) http.HandlerFunc {
 					http.Error(writer, err.Error(), http.StatusInternalServerError)
 					return
 				}
-			} else if len(response.Body) > 0 {
+			} else if response.Body != "" {
 				data = []byte(response.Body)
 			}
 
