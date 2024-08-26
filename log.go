@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -12,7 +13,7 @@ import (
 
 func LogHandler() *slog.JSONHandler {
 	// Setup a JSON handler for the new log/slog library
-	return slog.HandlerOptions{
+	return slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		// Remove default time slog.Attr, we create our own later
 		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
 			if a.Key == slog.TimeKey {
@@ -20,7 +21,7 @@ func LogHandler() *slog.JSONHandler {
 			}
 			return a
 		},
-	}.NewJSONHandler(os.Stdout)
+	})
 }
 
 // StructuredLogger is a simple, but powerful implementation of a custom structured
@@ -37,6 +38,8 @@ type StructuredLogger struct {
 }
 
 func (l *StructuredLogger) NewLogEntry(r *http.Request) middleware.LogEntry {
+	ctx := r.Context()
+
 	var logFields []slog.Attr
 	logFields = append(logFields, slog.String("ts", time.Now().UTC().Format(time.RFC1123)))
 
@@ -58,54 +61,32 @@ func (l *StructuredLogger) NewLogEntry(r *http.Request) middleware.LogEntry {
 		slog.String("uri", fmt.Sprintf("%s://%s%s", scheme, r.Host, r.RequestURI)),
 	))
 
-	entry := StructuredLoggerEntry{Logger: slog.New(handler)}
+	entry := StructuredLoggerEntry{
+		ctx:    ctx,
+		Logger: slog.New(handler),
+	}
 
-	entry.Logger.LogAttrs(slog.LevelInfo, "request started")
+	entry.Logger.LogAttrs(ctx, slog.LevelInfo, "request started")
 
 	return &entry
 }
 
 type StructuredLoggerEntry struct {
+	ctx    context.Context
 	Logger *slog.Logger
 }
 
 func (l *StructuredLoggerEntry) Write(status, bytes int, header http.Header, elapsed time.Duration, extra interface{}) {
-	l.Logger.LogAttrs(slog.LevelInfo, "request complete",
+	l.Logger.LogAttrs(l.ctx, slog.LevelInfo, "request complete",
 		slog.Int("resp_status", status),
 		slog.Int("resp_byte_length", bytes),
 		slog.Float64("resp_elapsed_ms", float64(elapsed.Nanoseconds())/1000000.0),
 	)
 }
 
-func (l *StructuredLoggerEntry) Panic(v interface{}, stack []byte) {
-	l.Logger.LogAttrs(slog.LevelInfo, "",
+func (l *StructuredLoggerEntry) Panic(v any, stack []byte) {
+	l.Logger.LogAttrs(l.ctx, slog.LevelInfo, "",
 		slog.String("stack", string(stack)),
 		slog.String("panic", fmt.Sprintf("%+v", v)),
 	)
-}
-
-// Helper methods used by the application to get the request-scoped
-// logger entry and set additional fields between handlers.
-//
-// This is a useful pattern to use to set state on the entry as it
-// passes through the handler chain, which at any point can be logged
-// with a call to .Print(), .Info(), etc.
-
-func GetLogEntry(r *http.Request) *slog.Logger {
-	entry := middleware.GetLogEntry(r).(*StructuredLoggerEntry)
-	return entry.Logger
-}
-
-func LogEntrySetField(r *http.Request, key string, value interface{}) {
-	if entry, ok := r.Context().Value(middleware.LogEntryCtxKey).(*StructuredLoggerEntry); ok {
-		entry.Logger = entry.Logger.With(key, value)
-	}
-}
-
-func LogEntrySetFields(r *http.Request, fields map[string]interface{}) {
-	if entry, ok := r.Context().Value(middleware.LogEntryCtxKey).(*StructuredLoggerEntry); ok {
-		for k, v := range fields {
-			entry.Logger = entry.Logger.With(k, v)
-		}
-	}
 }
