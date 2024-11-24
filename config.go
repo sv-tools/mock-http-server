@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
+	"fmt"
 	"net/http"
 	"os"
+	"text/template"
 
 	"golang.org/x/exp/slog"
 )
@@ -14,7 +17,6 @@ type Config struct {
 }
 
 type Route struct {
-	Method    string     `json:"method,omitempty" yaml:"method,omitempty"`
 	Pattern   string     `json:"pattern,omitempty" yaml:"pattern,omitempty"`
 	Responses []Response `json:"responses" yaml:"responses"`
 }
@@ -53,8 +55,12 @@ func responsesWriter(responses []Response, log *slog.Logger) http.HandlerFunc {
 					http.Error(writer, err.Error(), http.StatusInternalServerError)
 					return
 				}
-			} else if response.Body != "" {
-				data = []byte(response.Body)
+			} else if body := response.Body; body != "" {
+				var err error
+				data, err = executeTemplate(body, request)
+				if err != nil {
+					panic(err)
+				}
 			}
 
 			for name, header := range response.Headers {
@@ -71,10 +77,22 @@ func responsesWriter(responses []Response, log *slog.Logger) http.HandlerFunc {
 
 			if len(data) > 0 {
 				if _, err := writer.Write(data); err != nil {
-					log.Error("sending response failed", err)
+					log.ErrorContext(request.Context(), "sending response failed", slog.String("error", err.Error()))
 				}
 			}
 			return
 		}
 	}
+}
+
+func executeTemplate(body string, request *http.Request) ([]byte, error) {
+	tmpl, err := template.New("response").Parse(body)
+	if err != nil {
+		return nil, fmt.Errorf("parse template failed: %w", err)
+	}
+	buf := bytes.NewBuffer(nil)
+	if err := tmpl.Execute(buf, request); err != nil {
+		return nil, fmt.Errorf("execute template failed: %w", err)
+	}
+	return buf.Bytes(), nil
 }

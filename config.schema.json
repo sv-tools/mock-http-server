@@ -21,11 +21,6 @@
       "items": {
         "type": "object",
         "properties": {
-          "method": {
-            "description": "The HTTP method, any of the standard or custom.",
-            "default": "GET",
-            "type": "string"
-          },
           "pattern": {
             "description": "An url pattern",
             "default": "/",

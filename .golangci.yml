@@ -5,14 +5,14 @@ linters:
   enable: # keep in ascending order
     - asciicheck
     - bodyclose
+    - copyloopvar
     - dupl
     - durationcheck
+    - err113
     - exhaustive
-    - exportloopref
     - gci
     - goconst
     - gocritic
-    - goerr113
     - gofumpt
     - goprintffuncname
     - gosec
@@ -41,7 +41,10 @@ linters-settings:
     disable:
       - shadow
   gci:
-    local-prefixes: github.com/sv-tools/mock-http-server
+    sections:
+      - standard
+      - default
+      - prefix(github.com/sv-tools/mock-http-server)
   gocognit:
     min-complexity: 15
   gocyclo:
