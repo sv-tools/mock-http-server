@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"golang.org/x/exp/slog"
+
 	"net/http"
 	"os"
-
-	"golang.org/x/exp/slog"
+	"text/template"
 )
 
 type Config struct {
@@ -14,7 +16,6 @@ type Config struct {
 }
 
 type Route struct {
-	Method    string     `json:"method,omitempty" yaml:"method,omitempty"`
 	Pattern   string     `json:"pattern,omitempty" yaml:"pattern,omitempty"`
 	Responses []Response `json:"responses" yaml:"responses"`
 }
@@ -53,8 +54,20 @@ func responsesWriter(responses []Response, log *slog.Logger) http.HandlerFunc {
 					http.Error(writer, err.Error(), http.StatusInternalServerError)
 					return
 				}
-			} else if response.Body != "" {
-				data = []byte(response.Body)
+			} else if body := response.Body; body != "" {
+				tmpl, err := template.New("response").Parse(body)
+				if err != nil {
+					log.WarnContext(request.Context(), "parsing response body failed", slog.String("error", err.Error()))
+					data = []byte(body)
+				} else {
+					buf := bytes.NewBuffer(nil)
+					if err := tmpl.Execute(buf, request); err != nil {
+						log.WarnContext(request.Context(), "executing response body template failed", slog.String("error", err.Error()))
+						data = []byte(body)
+					} else {
+						data = buf.Bytes()
+					}
+				}
 			}
 
 			for name, header := range response.Headers {
@@ -71,7 +84,7 @@ func responsesWriter(responses []Response, log *slog.Logger) http.HandlerFunc {
 
 			if len(data) > 0 {
 				if _, err := writer.Write(data); err != nil {
-					log.Error("sending response failed", err)
+					log.ErrorContext(request.Context(), "sending response failed", slog.String("error", err.Error()))
 				}
 			}
 			return

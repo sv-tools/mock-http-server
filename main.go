@@ -11,16 +11,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	flag "github.com/spf13/pflag"
 	"golang.org/x/exp/slog"
 	"gopkg.in/yaml.v3"
 )
 
 func main() {
-	logHandler := LogHandler()
-	log := slog.New(logHandler)
+	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	conf := flag.StringP("config", "c", "config.yaml", "config file")
 	port := flag.IntP("port", "p", 8080, "http port")
 	flag.Parse()
@@ -53,30 +50,28 @@ func main() {
 	if config.Port != 0 {
 		port = &config.Port
 	}
-
-	if config.RequestIDHeader != "" {
-		middleware.RequestIDHeader = config.RequestIDHeader
+	if config.RequestIDHeader == "" {
+		config.RequestIDHeader = "X-Request-ID"
 	}
 
-	r := chi.NewMux().With(middleware.RequestID, NewStructuredLogger(LogHandler()))
-	r.NotFound(func(writer http.ResponseWriter, request *http.Request) {
-		http.NotFound(writer, request)
-	})
+	mux := http.NewServeMux()
+	var isRootRegistered bool
 	for _, route := range config.Routes {
-		if route.Method == "" {
-			route.Method = "GET"
-		} else {
-			chi.RegisterMethod(route.Method)
-		}
 		if route.Pattern == "" {
 			route.Pattern = "/"
 		}
-		r.MethodFunc(route.Method, route.Pattern, responsesWriter(route.Responses, log))
+		if route.Pattern == "/" {
+			isRootRegistered = true
+		}
+		mux.HandleFunc(route.Pattern, StructuredLogger(log, config.RequestIDHeader, responsesWriter(route.Responses, log)))
+	}
+	if !isRootRegistered {
+		mux.HandleFunc("/", StructuredLogger(log, config.RequestIDHeader, http.NotFound))
 	}
 
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%d", *port),
-		Handler:           r,
+		Handler:           mux,
 		ReadHeaderTimeout: 1 * time.Second,
 	}
 	serverCtx, serverStopCtx := context.WithCancel(context.Background())
@@ -91,6 +86,7 @@ func main() {
 
 		go func() {
 			<-shutdownCtx.Done()
+			log.Info("graceful shutdown")
 			if errors.Is(shutdownCtx.Err(), context.DeadlineExceeded) {
 				log.Error("graceful shutdown timed out.. forcing exit.", nil)
 				os.Exit(1)
