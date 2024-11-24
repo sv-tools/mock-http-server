@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	"golang.org/x/exp/slog"
 	"net/http"
+
+	"golang.org/x/exp/slog"
 )
 
 type wrapper struct {

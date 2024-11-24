@@ -2,11 +2,12 @@ package main
 
 import (
 	"bytes"
-	"golang.org/x/exp/slog"
-
+	"fmt"
 	"net/http"
 	"os"
 	"text/template"
+
+	"golang.org/x/exp/slog"
 )
 
 type Config struct {
@@ -55,18 +56,10 @@ func responsesWriter(responses []Response, log *slog.Logger) http.HandlerFunc {
 					return
 				}
 			} else if body := response.Body; body != "" {
-				tmpl, err := template.New("response").Parse(body)
+				var err error
+				data, err = executeTemplate(body, request)
 				if err != nil {
-					log.WarnContext(request.Context(), "parsing response body failed", slog.String("error", err.Error()))
-					data = []byte(body)
-				} else {
-					buf := bytes.NewBuffer(nil)
-					if err := tmpl.Execute(buf, request); err != nil {
-						log.WarnContext(request.Context(), "executing response body template failed", slog.String("error", err.Error()))
-						data = []byte(body)
-					} else {
-						data = buf.Bytes()
-					}
+					panic(err)
 				}
 			}
 
@@ -90,4 +83,16 @@ func responsesWriter(responses []Response, log *slog.Logger) http.HandlerFunc {
 			return
 		}
 	}
+}
+
+func executeTemplate(body string, request *http.Request) ([]byte, error) {
+	tmpl, err := template.New("response").Parse(body)
+	if err != nil {
+		return nil, fmt.Errorf("parse template failed: %w", err)
+	}
+	buf := bytes.NewBuffer(nil)
+	if err := tmpl.Execute(buf, request); err != nil {
+		return nil, fmt.Errorf("execute template failed: %w", err)
+	}
+	return buf.Bytes(), nil
 }

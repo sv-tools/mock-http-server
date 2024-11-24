@@ -63,7 +63,10 @@ func main() {
 		if route.Pattern == "/" {
 			isRootRegistered = true
 		}
-		mux.HandleFunc(route.Pattern, StructuredLogger(log, config.RequestIDHeader, responsesWriter(route.Responses, log)))
+		mux.HandleFunc(
+			route.Pattern,
+			StructuredLogger(log, config.RequestIDHeader, responsesWriter(route.Responses, log)),
+		)
 	}
 	if !isRootRegistered {
 		mux.HandleFunc("/", StructuredLogger(log, config.RequestIDHeader, http.NotFound))
