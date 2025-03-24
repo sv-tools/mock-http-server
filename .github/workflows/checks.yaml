@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@v4.2.2 # immutable action, safe to use a version instead of hashtag
 
       - name: Install Go
-        uses: actions/setup-go@v5.3.0 # immutable action, safe to use a version instead of hashtag
+        uses: actions/setup-go@v5.4.0 # immutable action, safe to use a version instead of hashtag
         with:
           go-version: ${{ env.GO }}
 
@@ -48,7 +48,7 @@ jobs:
         uses: actions/checkout@v4.2.2 # immutable action, safe to use a version instead of hashtag
 
       - name: Install Go
-        uses: actions/setup-go@v5.3.0 # immutable action, safe to use a version instead of hashtag
+        uses: actions/setup-go@v5.4.0 # immutable action, safe to use a version instead of hashtag
         with:
           go-version: ${{ env.GO }}
 
