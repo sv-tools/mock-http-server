@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/goccy/go-yaml"
 	flag "github.com/spf13/pflag"
 	"golang.org/x/exp/slog"
-	"gopkg.in/yaml.v3"
 )
 
 func main() {
@@ -41,8 +41,7 @@ func main() {
 	}
 
 	var config Config
-	d := yaml.NewDecoder(f)
-	d.KnownFields(true)
+	d := yaml.NewDecoder(f, yaml.DisallowUnknownField())
 	if err := d.Decode(&config); err != nil {
 		log.Error("decoding config failed", err)
 		os.Exit(1)
