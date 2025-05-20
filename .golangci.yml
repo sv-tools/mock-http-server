@@ -1,4 +1,8 @@
+version: "2"
+
 linters:
+  default: none
+  
   enable: # keep in ascending order
     - asasalint
     - asciicheck
@@ -13,15 +17,12 @@ linters:
     - exhaustive
     - exptostd
     - fatcontext
-    - gci
     - gocheckcompilerdirectives
     - gochecksumtype
     - goconst
     - gocritic
-    - gofumpt
     - goprintffuncname
     - gosec
-    - gosimple
     - govet
     - iface
     - inamedparam
@@ -35,6 +36,7 @@ linters:
     - nilerr
     - noctx
     - nolintlint
+    - paralleltest
     - perfsprint
     - prealloc
     - predeclared
@@ -55,41 +57,41 @@ linters:
     - wastedassign
     - whitespace
 
-linters-settings:
-  dupl:
-    threshold: 100
-  misspell:
-    locale: US
-  govet:
-    enable-all: true
-    disable:
-      - shadow
-  gci:
-    sections:
-      - standard
-      - default
-      - prefix(github.com/sv-tools/mock-http-server)
-  gofumpt:
-    extra-rules: true
-  lll:
-    line-length: 120
-    tab-width: 4
-  goconst:
-    min-len: 3
-    min-occurrences: 3
-  prealloc:
-    for-loops: true
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
-    disabled-checks:
-      - whyNoLint
+  settings:
+    dupl:
+      threshold: 100
+    misspell:
+      locale: US
+    lll:
+      line-length: 120
+      tab-width: 4
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+    prealloc:
+      for-loops: true
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - experimental
+        - opinionated
+        - performance
+        - style
+      disabled-checks:
+        - whyNoLint
 
-issues:
-  exclude-use-default: false
-  exclude:
-    - should have a package comment
+  exclusions:
+    warn-unused: true
+
+formatters:
+  enable:
+    - gci
+    - gofumpt
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/sv-tools/mock-http-server)
+    gofumpt:
+      extra-rules: true
