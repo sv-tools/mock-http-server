@@ -1,3 +1,5 @@
+version: 2
+
 project_name: mock-http-server
 
 release:
@@ -20,7 +22,8 @@ builds:
     ldflags: -s -w -X main.version={{ .Tag }}
 
 archives:
-  - format: tar.gz
+  - formats:
+      - tar.gz
     wrap_in_directory: true
     name_template: "{{ .Binary }}-{{ .Tag }}-{{ .Os }}-{{ .Arch }}"
 
