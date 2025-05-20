@@ -15,3 +15,5 @@
 # vendor/
 
 .github/Brewfile.lock.json
+
+mock-http-server
