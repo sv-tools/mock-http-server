@@ -24,9 +24,18 @@ jobs:
       - uses: actions/setup-go@v5.5.0 # immutable action, safe to use a version instead of hashtag
         with:
           go-version-file: go.mod
+      - run: go install github.com/jstemmer/go-junit-report/v2@latest
       - run: go test -race -cover -coverprofile=coverage.out -covermode=atomic
-      - name: Codecov
+      - run: go test -json 2>&1 | go-junit-report -parser gojson > junit.xml
+        if: always()
+      - name: Upload coverage reports to Codecov
+        if: ${{ !cancelled() }}
         uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24 # v5.4.3
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@f2dba722c67b86c6caa034178c6e4d35335f6706 # v1.1.0
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
