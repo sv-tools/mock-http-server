@@ -20,7 +20,7 @@ jobs:
   UnitTests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4.2.2 # immutable action, safe to use a version instead of hashtag
+      - uses: actions/checkout@v5.0.0 # immutable action, safe to use a version instead of hashtag
       - uses: actions/setup-go@v5.5.0 # immutable action, safe to use a version instead of hashtag
         with:
           go-version-file: go.mod
@@ -42,7 +42,7 @@ jobs:
   GolangCI-Lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4.2.2 # immutable action, safe to use a version instead of hashtag
+      - uses: actions/checkout@v5.0.0 # immutable action, safe to use a version instead of hashtag
       - uses: actions/setup-go@v5.5.0 # immutable action, safe to use a version instead of hashtag
         with:
           go-version-file: go.mod
