@@ -3,11 +3,10 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"text/template"
-
-	"golang.org/x/exp/slog"
 )
 
 type Config struct {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,7 +14,6 @@ import (
 
 	"github.com/goccy/go-yaml"
 	flag "github.com/spf13/pflag"
-	"golang.org/x/exp/slog"
 )
 
 func main() {
@@ -28,7 +28,7 @@ func main() {
 	if v := os.Getenv("PORT"); v != "" && !flag.Lookup("port").Changed {
 		p, err := strconv.Atoi(v)
 		if err != nil {
-			log.Error(fmt.Sprintf("wrong value %q of env variable PORT", v), err)
+			log.Error(fmt.Sprintf("wrong value %q of env variable PORT", v), slog.String("error", err.Error()))
 			os.Exit(1)
 		}
 		port = &p
@@ -36,14 +36,14 @@ func main() {
 
 	f, err := os.Open(*conf)
 	if err != nil {
-		log.Error(fmt.Sprintf("wrong config file %q", *conf), err)
+		log.Error(fmt.Sprintf("wrong config file %q", *conf), slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 
 	var config Config
 	d := yaml.NewDecoder(f, yaml.DisallowUnknownField())
 	if err := d.Decode(&config); err != nil {
-		log.Error("decoding config failed", err)
+		log.Error("decoding config failed", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 	if config.Port != 0 {
@@ -82,7 +82,7 @@ func main() {
 	go func() {
 		<-sig
 
-		// Shutdown signal with grace period of 30 seconds
+		// Shutdown signal with a grace period of 30 seconds
 		shutdownCtx, shutdownCancelCtx := context.WithTimeout(serverCtx, 30*time.Second)
 		defer shutdownCancelCtx()
 
@@ -90,14 +90,14 @@ func main() {
 			<-shutdownCtx.Done()
 			log.Info("graceful shutdown")
 			if errors.Is(shutdownCtx.Err(), context.DeadlineExceeded) {
-				log.Error("graceful shutdown timed out.. forcing exit.", nil)
+				log.Error("graceful shutdown timed out.. forcing exit.")
 				os.Exit(1)
 			}
 		}()
 
 		// Trigger graceful shutdown
 		if err := server.Shutdown(shutdownCtx); err != nil {
-			log.Error("graceful shutdown failed", err)
+			log.Error("graceful shutdown failed", slog.String("error", err.Error()))
 		}
 		serverStopCtx()
 	}()
@@ -105,7 +105,7 @@ func main() {
 	// Run the server
 	log.Info(fmt.Sprintf("Listen on http://localhost:%d", *port))
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Error("starting failed", err)
+		log.Error("starting failed", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 
