@@ -149,7 +149,7 @@ func TestStructuredLogger_BasicFields(t *testing.T) {
 	rec := httptest.NewRecorder()
 	// Use relative URL so that when we manually set Host, the constructed URI is correct.
 	// If we used an absolute URL, Host would be duplicated in the URI
-	// (e.g., "http://example.comhttp://example.com/test?q=1").
+	// (e.g., "http://example.com/test?q=1").
 	req := httptest.NewRequest(http.MethodGet, "/test?q=1", http.NoBody)
 	req.Host = "example.com"
 	req.Header.Set("X-Request-ID", "abc-123")
