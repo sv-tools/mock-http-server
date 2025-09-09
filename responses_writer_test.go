@@ -36,7 +36,7 @@ func TestResponsesWriter_FileAndJSONHeader(t *testing.T) {
 	if rec.Code != 201 {
 		t.Fatalf("expected status 201, got %d", rec.Code)
 	}
-	if got := rec.Header().Get("Content-Type"); got != "application/json" {
+	if got := rec.Header().Get("Content-Type"); got != JsonContentType {
 		t.Fatalf("expected application/json, got %q", got)
 	}
 	if got := rec.Header().Get("X-Test"); got != "yes" {
@@ -187,7 +187,7 @@ func TestResponsesWriter_JSONBodySetsContentType(t *testing.T) {
 	rec := httptest.NewRecorder()
 	rw := responsesWriter(responses, testLogger(io.Discard))
 	rw(rec, httptest.NewRequest(http.MethodGet, "/", http.NoBody))
-	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+	if ct := rec.Header().Get("Content-Type"); ct != JsonContentType {
 		t.Fatalf("expected application/json, got %q", ct)
 	}
 }
