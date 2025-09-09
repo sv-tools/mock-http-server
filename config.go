@@ -9,6 +9,8 @@ import (
 	"text/template"
 )
 
+const JsonContentType = "application/json"
+
 type Config struct {
 	RequestIDHeader string  `json:"request_id_header,omitempty" yaml:"request_id_header,omitempty"`
 	Routes          []Route `json:"routes" yaml:"routes"`
@@ -69,7 +71,7 @@ func responsesWriter(responses []Response, log *slog.Logger) http.HandlerFunc {
 			}
 			if response.IsJSON {
 				if writer.Header().Get("Content-Type") == "" {
-					writer.Header().Set("Content-Type", "application/json")
+					writer.Header().Set("Content-Type", JsonContentType)
 				}
 			}
 			writer.WriteHeader(response.Code)
