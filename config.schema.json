@@ -63,6 +63,11 @@
                 "repeat": {
                   "description": "the number of repeats. Infinity if no set. Zero to skip. Or an exact number of repeats.",
                   "type": "integer"
+                },
+                "delay": {
+                  "description": "The delay before sending the response",
+                  "default": "0ms",
+                  "type": "string"
                 }
               }
             },

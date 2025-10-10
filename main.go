@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,41 +18,96 @@ import (
 )
 
 func main() {
-	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
-	conf := flag.StringP("config", "c", "config.yaml", "config file")
-	port := flag.IntP("port", "p", 8080, "http port")
-	flag.Parse()
+	InitLogger()
 
-	if v := os.Getenv("CONFIG"); v != "" && !flag.Lookup("config").Changed {
-		conf = &v
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	go func() {
+		<-sig
+		cancel()
+	}()
+
+	var args []string
+	if len(os.Args) > 1 {
+		args = os.Args[1:]
 	}
-	if v := os.Getenv("PORT"); v != "" && !flag.Lookup("port").Changed {
+
+	if err := run(ctx, args); err != nil {
+		slog.Error("Exiting with error", slog.String("error", err.Error()))
+		_ = os.Stderr.Sync() // ensure all output is flushed before exiting
+		cancel()
+		os.Exit(1) //nolint:gocritic // cancel is called manually
+	}
+}
+
+func getConfig(args []string) (config *Config, retError error) {
+	fs := flag.NewFlagSet("mock-http-server", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	var port int
+	if v, ok := os.LookupEnv("PORT"); ok {
 		p, err := strconv.Atoi(v)
 		if err != nil {
-			log.Error(fmt.Sprintf("wrong value %q of env variable PORT", v), slog.String("error", err.Error()))
-			os.Exit(1)
+			return nil, fmt.Errorf("wrong value %q of env variable PORT: %w", v, err)
 		}
-		port = &p
+		port = p
 	}
 
-	f, err := os.Open(*conf)
+	configPath := fs.StringP("config", "c", "config.yaml", "config file")
+	fsPort := fs.IntP("port", "p", 8080, "http port")
+
+	if err := fs.Parse(args); err != nil {
+		return nil, fmt.Errorf("parsing commandline arguments failed: %w", err)
+	}
+
+	if fs.Lookup("port").Changed {
+		port = *fsPort
+	}
+
+	if v, ok := os.LookupEnv("CONFIG"); ok && !fs.Lookup("config").Changed {
+		*configPath = v
+	}
+
+	f, err := os.Open(*configPath)
 	if err != nil {
-		log.Error(fmt.Sprintf("wrong config file %q", *conf), slog.String("error", err.Error()))
-		os.Exit(1)
+		return nil, fmt.Errorf("wrong config file %q: %w", *configPath, err)
 	}
+	defer func(f *os.File) {
+		if err := f.Close(); err != nil {
+			retError = errors.Join(retError, fmt.Errorf("failed to close config file %q: %w", *configPath, err))
+		}
+	}(f)
 
-	var config Config
+	var conf Config
 	d := yaml.NewDecoder(f)
 	d.KnownFields(true)
-	if err := d.Decode(&config); err != nil {
-		log.Error("decoding config failed", slog.String("error", err.Error()))
-		os.Exit(1)
+	if err := d.Decode(&conf); err != nil {
+		return nil, fmt.Errorf("decoding config failed: %w", err)
 	}
-	if config.Port != 0 {
-		port = &config.Port
+	if port != 0 {
+		conf.Port = port
 	}
-	if config.RequestIDHeader == "" {
-		config.RequestIDHeader = "X-Request-ID"
+	if conf.Port == 0 {
+		conf.Port = *fsPort
+	}
+	if conf.RequestIDHeader == "" {
+		conf.RequestIDHeader = "X-Request-ID"
+	}
+
+	return &conf, nil
+}
+
+// run executes the main logic. When startServer is false it stops after constructing the server and
+// returns immediately.
+// Returns (exitCode, serverAddress, error)
+func run(
+	ctx context.Context,
+	args []string,
+) (retError error) {
+	config, err := getConfig(args)
+	if err != nil {
+		return err
 	}
 
 	mux := http.NewServeMux()
@@ -63,53 +119,47 @@ func main() {
 		if route.Pattern == "/" {
 			isRootRegistered = true
 		}
-		mux.HandleFunc(
-			route.Pattern,
-			StructuredLogger(log, config.RequestIDHeader, responsesWriter(route.Responses, log)),
-		)
+		mux.HandleFunc(route.Pattern, StructuredLogger(
+			config.RequestIDHeader,
+			responsesWriter(route.Responses),
+		))
 	}
 	if !isRootRegistered {
-		mux.HandleFunc("/", StructuredLogger(log, config.RequestIDHeader, http.NotFound))
+		mux.HandleFunc("/", StructuredLogger(config.RequestIDHeader, http.NotFound))
 	}
 
-	server := &http.Server{
-		Addr:              fmt.Sprintf(":%d", *port),
-		Handler:           mux,
-		ReadHeaderTimeout: 1 * time.Second,
+	addr := fmt.Sprintf(":%d", config.Port)
+	server := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 1 * time.Second}
+	server.BaseContext = func(_ net.Listener) context.Context {
+		return ctx
 	}
-	serverCtx, serverStopCtx := context.WithCancel(context.Background())
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+
+	serverCtx, serverCancel := context.WithCancel(context.Background())
+	defer serverCancel()
 	go func() {
-		<-sig
-
-		// Shutdown signal with a grace period of 30 seconds
-		shutdownCtx, shutdownCancelCtx := context.WithTimeout(serverCtx, 30*time.Second)
-		defer shutdownCancelCtx()
-
+		defer serverCancel()
+		<-ctx.Done()
+		slog.Info("Shutdown signal received")
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer shutdownCancel()
 		go func() {
-			<-shutdownCtx.Done()
-			log.Info("graceful shutdown")
-			if errors.Is(shutdownCtx.Err(), context.DeadlineExceeded) {
-				log.Error("graceful shutdown timed out.. forcing exit.")
-				os.Exit(1)
+			if err := server.Shutdown(shutdownCtx); err != nil {
+				if !errors.Is(err, context.DeadlineExceeded) {
+					retError = errors.Join(retError, fmt.Errorf("server shutdown failed: %w", err))
+				}
 			}
+			shutdownCancel()
 		}()
-
-		// Trigger graceful shutdown
-		if err := server.Shutdown(shutdownCtx); err != nil {
-			log.Error("graceful shutdown failed", slog.String("error", err.Error()))
+		<-shutdownCtx.Done()
+		if errors.Is(shutdownCtx.Err(), context.DeadlineExceeded) {
+			retError = errors.Join(retError, errors.New("server shutdown timed out"))
 		}
-		serverStopCtx()
 	}()
 
-	// Run the server
-	log.Info(fmt.Sprintf("Listen on http://localhost:%d", *port))
+	slog.Info("Starting server", slog.String("addr", fmt.Sprintf("http://localhost:%d", config.Port)))
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Error("starting failed", slog.String("error", err.Error()))
-		os.Exit(1)
+		return fmt.Errorf("starting failed: %w", err)
 	}
-
-	// Wait for server context to be stopped
 	<-serverCtx.Done()
+	return
 }

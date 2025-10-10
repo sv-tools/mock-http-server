@@ -13,8 +13,15 @@ import (
 )
 
 // helper to build logger writing into a buffer
-func testLogger(buf io.Writer) *slog.Logger {
-	return slog.New(slog.NewJSONHandler(buf, nil))
+func setTestLogger(tb testing.TB, buf io.Writer) {
+	tb.Helper()
+	oldLogger := slog.Default()
+	tb.Cleanup(func() {
+		slog.SetDefault(oldLogger)
+	})
+
+	newLogger := slog.New(slog.NewJSONHandler(buf, nil))
+	slog.SetDefault(newLogger)
 }
 
 func TestResponsesWriter_FileAndJSONHeader(t *testing.T) {
@@ -29,14 +36,14 @@ func TestResponsesWriter_FileAndJSONHeader(t *testing.T) {
 
 	resp := Response{File: fname, Code: 201, IsJSON: true, Headers: http.Header{"X-Test": {"yes"}}}
 	rec := httptest.NewRecorder()
-	rw := responsesWriter([]Response{resp}, testLogger(io.Discard))
+	rw := responsesWriter([]Response{resp})
 	r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	rw(rec, r)
 
 	if rec.Code != 201 {
 		t.Fatalf("expected status 201, got %d", rec.Code)
 	}
-	if got := rec.Header().Get("Content-Type"); got != "application/json" {
+	if got := rec.Header().Get("Content-Type"); got != JsonContentType {
 		t.Fatalf("expected application/json, got %q", got)
 	}
 	if got := rec.Header().Get("X-Test"); got != "yes" {
@@ -52,7 +59,7 @@ func TestResponsesWriter_RepeatLogic(t *testing.T) {
 
 	repeat := 2
 	responses := []Response{{Body: "first", Code: 200, Repeat: &repeat}, {Body: "second", Code: 202}}
-	rw := responsesWriter(responses, testLogger(io.Discard))
+	rw := responsesWriter(responses)
 
 	// first call
 	rec1 := httptest.NewRecorder()
@@ -77,7 +84,7 @@ func TestResponsesWriter_RepeatLogic(t *testing.T) {
 func TestResponsesWriter_NotFoundWhenExhausted(t *testing.T) {
 	t.Parallel()
 
-	rw := responsesWriter([]Response{}, testLogger(io.Discard))
+	rw := responsesWriter([]Response{})
 	rec := httptest.NewRecorder()
 	rw(rec, httptest.NewRequest(http.MethodGet, "/", http.NoBody))
 	if rec.Code != http.StatusNotFound {
@@ -90,7 +97,7 @@ func TestResponsesWriter_FileReadError(t *testing.T) {
 
 	responses := []Response{{File: "no_such_file", Code: 200}}
 	rec := httptest.NewRecorder()
-	rw := responsesWriter(responses, testLogger(io.Discard))
+	rw := responsesWriter(responses)
 	rw(rec, httptest.NewRequest(http.MethodGet, "/", http.NoBody))
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", rec.Code)
@@ -105,7 +112,7 @@ func TestResponsesWriter_JSONDoesNotOverrideExistingContentType(t *testing.T) {
 
 	responses := []Response{{Body: "{}", Code: 200, IsJSON: true, Headers: http.Header{"Content-Type": {"text/plain"}}}}
 	rec := httptest.NewRecorder()
-	rw := responsesWriter(responses, testLogger(io.Discard))
+	rw := responsesWriter(responses)
 	rw(rec, httptest.NewRequest(http.MethodGet, "/", http.NoBody))
 	if got := rec.Header().Get("Content-Type"); got != "text/plain" {
 		t.Fatalf("expected text/plain kept, got %q", got)
@@ -138,14 +145,14 @@ func TestStructuredLogger_BasicFields(t *testing.T) {
 	t.Parallel()
 
 	var buf strings.Builder
-	logger := testLogger(&buf)
+	setTestLogger(t, &buf)
 
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Handled", "1")
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	h := StructuredLogger(logger, "X-Request-ID", next)
+	h := StructuredLogger("X-Request-ID", next)
 	rec := httptest.NewRecorder()
 	// Use relative URL so that when we manually set Host, the constructed URI is correct.
 	// If we used an absolute URL, Host would be duplicated in the URI
@@ -185,9 +192,9 @@ func TestResponsesWriter_JSONBodySetsContentType(t *testing.T) {
 
 	responses := []Response{{Body: "{\"k\":1}", Code: 200, IsJSON: true}}
 	rec := httptest.NewRecorder()
-	rw := responsesWriter(responses, testLogger(io.Discard))
+	rw := responsesWriter(responses)
 	rw(rec, httptest.NewRequest(http.MethodGet, "/", http.NoBody))
-	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+	if ct := rec.Header().Get("Content-Type"); ct != JsonContentType {
 		t.Fatalf("expected application/json, got %q", ct)
 	}
 }
@@ -198,7 +205,7 @@ func TestResponsesWriter_RepeatZeroSkips(t *testing.T) {
 	zero := 0
 	responses := []Response{{Body: "skip", Code: 200, Repeat: &zero}, {Body: "use", Code: 201}}
 	rec := httptest.NewRecorder()
-	rw := responsesWriter(responses, testLogger(io.Discard))
+	rw := responsesWriter(responses)
 	rw(rec, httptest.NewRequest(http.MethodGet, "/", http.NoBody))
 	if rec.Code != 201 || strings.TrimSpace(rec.Body.String()) != "use" {
 		t.Fatalf("expected second response, got %d %q", rec.Code, rec.Body.String())

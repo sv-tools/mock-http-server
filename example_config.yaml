@@ -44,3 +44,7 @@ routes:
         repeat: 1
       - code: 404
         body: user "{{.PathValue "id"}}" not found
+  - pattern: GET /delay/1min
+    responses:
+      - code: 200
+        delay: 1m

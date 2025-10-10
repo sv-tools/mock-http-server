@@ -7,7 +7,10 @@ import (
 	"net/http"
 	"os"
 	"text/template"
+	"time"
 )
+
+const JsonContentType = "application/json"
 
 type Config struct {
 	RequestIDHeader string  `json:"request_id_header,omitempty" yaml:"request_id_header,omitempty"`
@@ -21,15 +24,16 @@ type Route struct {
 }
 
 type Response struct {
-	Headers http.Header `json:"headers,omitempty" yaml:"headers,omitempty"`
-	Repeat  *int        `json:"repeat,omitempty" yaml:"repeat,omitempty"`
-	Body    string      `json:"body,omitempty" yaml:"body,omitempty"`
-	File    string      `json:"file,omitempty" yaml:"file,omitempty"`
-	Code    int         `json:"code,omitempty" yaml:"code,omitempty"`
-	IsJSON  bool        `json:"is_json,omitempty" yaml:"is_json,omitempty"`
+	Headers http.Header   `json:"headers,omitempty" yaml:"headers,omitempty"`
+	Repeat  *int          `json:"repeat,omitempty" yaml:"repeat,omitempty"`
+	Body    string        `json:"body,omitempty" yaml:"body,omitempty"`
+	File    string        `json:"file,omitempty" yaml:"file,omitempty"`
+	Code    int           `json:"code,omitempty" yaml:"code,omitempty"`
+	IsJSON  bool          `json:"is_json,omitempty" yaml:"is_json,omitempty"`
+	Delay   time.Duration `json:"delay,omitempty" yaml:"delay,omitempty"`
 }
 
-func responsesWriter(responses []Response, log *slog.Logger) http.HandlerFunc {
+func responsesWriter(responses []Response) http.HandlerFunc {
 	var i int
 	return func(writer http.ResponseWriter, request *http.Request) {
 		for {
@@ -69,14 +73,17 @@ func responsesWriter(responses []Response, log *slog.Logger) http.HandlerFunc {
 			}
 			if response.IsJSON {
 				if writer.Header().Get("Content-Type") == "" {
-					writer.Header().Set("Content-Type", "application/json")
+					writer.Header().Set("Content-Type", JsonContentType)
 				}
+			}
+			if response.Delay > 0 {
+				time.Sleep(response.Delay)
 			}
 			writer.WriteHeader(response.Code)
 
 			if len(data) > 0 {
 				if _, err := writer.Write(data); err != nil {
-					log.ErrorContext(request.Context(), "sending response failed", slog.String("error", err.Error()))
+					slog.Error("Sending response failed", slog.String("error", err.Error()))
 				}
 			}
 			return

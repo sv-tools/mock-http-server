@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 )
 
 type wrapper struct {
@@ -29,7 +30,7 @@ func (w *wrapper) Write(b []byte) (int, error) {
 
 var _ http.ResponseWriter = &wrapper{}
 
-func StructuredLogger(log *slog.Logger, reqIDHeader string, next http.HandlerFunc) http.HandlerFunc {
+func StructuredLogger(reqIDHeader string, next http.HandlerFunc) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		wr := &wrapper{writer: writer}
 		next.ServeHTTP(wr, request)
@@ -39,7 +40,7 @@ func StructuredLogger(log *slog.Logger, reqIDHeader string, next http.HandlerFun
 			scheme = "https"
 		}
 
-		log.LogAttrs(request.Context(), slog.LevelInfo, "request completed",
+		slog.LogAttrs(request.Context(), slog.LevelInfo, "request completed",
 			slog.String("http_scheme", scheme),
 			slog.String("http_proto", request.Proto),
 			slog.String("http_method", request.Method),
@@ -51,4 +52,12 @@ func StructuredLogger(log *slog.Logger, reqIDHeader string, next http.HandlerFun
 			slog.String("request_id", request.Header.Get(reqIDHeader)),
 		)
 	}
+}
+
+func InitLogger() {
+	slog.SetLogLoggerLevel(slog.LevelDebug)
+	logHandler := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	})
+	slog.SetDefault(slog.New(logHandler))
 }
